@@ -34,7 +34,10 @@ ExportedObj/
 .DS_Store
 Thumbs.db
 
-# iOS Xcode build output
+# iOS Xcode / Unity build output
+Build_iOS/
+Build/
+Builds/
 *.xcodeproj/
 *.xcworkspace/
 DerivedData/
