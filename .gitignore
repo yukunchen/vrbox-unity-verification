@@ -1,0 +1,40 @@
+# Unity generated
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+MemoryCaptures/
+.vsconfig
+
+# Unity cache
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+
+# Visual Studio / Rider
+.vs/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+ExportedObj/
+.idea/
+*.rider.unity.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# iOS Xcode build output
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
