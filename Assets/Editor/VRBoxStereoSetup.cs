@@ -18,7 +18,19 @@ public static class VRBoxStereoSetup
     public static void AddStereo()
     {
         // ── 找到现有摄像机 ──────────────────────────────────────────────
-        Camera existingCam = Camera.main;
+        Camera existingCam = null;
+        VRHeadTracking[] trackers = Object.FindObjectsOfType<VRHeadTracking>();
+        foreach (var t in trackers)
+        {
+            Camera c = t.GetComponent<Camera>();
+            if (c != null)
+            {
+                existingCam = c;
+                break;
+            }
+        }
+        if (existingCam == null)
+            existingCam = Camera.main;
         if (existingCam == null)
         {
             Debug.LogError("[VRBoxStereo] 找不到 Main Camera，请先运行 'VRBox → Setup Phase 1 Scene'");
@@ -49,19 +61,30 @@ public static class VRBoxStereoSetup
 
         // ── 配置左眼（复用现有 Main Camera）────────────────────────────
         camGO.name = "Left Camera";
-        camGO.tag  = "Untagged";                  // MainCamera tag 只给一个
+        camGO.tag  = "MainCamera";
         existingCam.rect         = new Rect(0f, 0f, 0.5f, 1f);
         existingCam.fieldOfView  = fov;
         camGO.transform.localPosition = new Vector3(-halfIpd, 0f, 0f);
         camGO.transform.localRotation = Quaternion.identity;
 
-        // ── 创建右眼 ────────────────────────────────────────────────────
-        GameObject rightGO = new GameObject("Right Camera");
-        rightGO.transform.SetParent(rigTr, false);
+        // ── 创建/复用右眼 ───────────────────────────────────────────────
+        Transform rightTr = rigTr.Find("Right Camera");
+        GameObject rightGO;
+        Camera rightCam;
+        if (rightTr != null && rightTr.GetComponent<Camera>() != null)
+        {
+            rightGO = rightTr.gameObject;
+            rightCam = rightGO.GetComponent<Camera>();
+        }
+        else
+        {
+            rightGO = new GameObject("Right Camera");
+            rightGO.transform.SetParent(rigTr, false);
+            rightCam = rightGO.AddComponent<Camera>();
+        }
+
         rightGO.transform.localPosition = new Vector3(halfIpd, 0f, 0f);
         rightGO.transform.localRotation = Quaternion.identity;
-
-        Camera rightCam          = rightGO.AddComponent<Camera>();
         rightCam.rect            = new Rect(0.5f, 0f, 0.5f, 1f);
         rightCam.fieldOfView     = fov;
         rightCam.nearClipPlane   = existingCam.nearClipPlane;
@@ -69,7 +92,22 @@ public static class VRBoxStereoSetup
         rightCam.clearFlags      = existingCam.clearFlags;
         rightCam.backgroundColor = existingCam.backgroundColor;
         rightCam.depth           = existingCam.depth + 1;
-        rightGO.tag              = "MainCamera";   // 右眼做 Main
+        rightGO.tag              = "Untagged";
+
+        // 挂载 StereoCameraRig，统一双目参数入口
+        StereoCameraRig stereoRig = rigTr.GetComponent<StereoCameraRig>();
+        if (stereoRig == null)
+            stereoRig = rigTr.gameObject.AddComponent<StereoCameraRig>();
+        SetField(stereoRig, "leftCamera", existingCam);
+        SetField(stereoRig, "rightCamera", rightCam);
+        if (ht != null)
+        {
+            var settingsField = typeof(VRHeadTracking)
+                .GetField("vrSettings", BindingFlags.NonPublic | BindingFlags.Instance);
+            VRSettings vs = settingsField?.GetValue(ht) as VRSettings;
+            if (vs != null) SetField(stereoRig, "vrSettings", vs);
+        }
+        stereoRig.ApplyStereoCameraSetup();
 
         // VRHeadTracking 留在左眼即可（旋转 VR Rig 根节点，右眼跟着动）
 
@@ -83,9 +121,14 @@ public static class VRBoxStereoSetup
             {
                 // 左眼用原材质（_Eye=0），右眼复制一份（_Eye=1）
                 Material leftMat  = rend.sharedMaterial;
-                Material rightMat = new Material(leftMat);
+                const string rightMatPath = "Assets/VR/360_Right_Mat.mat";
+                Material rightMat = AssetDatabase.LoadAssetAtPath<Material>(rightMatPath);
+                if (rightMat == null)
+                {
+                    rightMat = new Material(leftMat);
+                    AssetDatabase.CreateAsset(rightMat, rightMatPath);
+                }
                 rightMat.SetFloat("_Eye", 1f);
-                AssetDatabase.CreateAsset(rightMat, "Assets/VR/360_Right_Mat.mat");
 
                 // 右眼摄像机通过 Layer + Culling Mask 渲染独立材质
                 // 简单方案：两眼 culling mask 全开（mono 图两眼看同一内容）
@@ -99,6 +142,13 @@ public static class VRBoxStereoSetup
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         Debug.Log($"[VRBoxStereo] ✅ 双目设置完成。IPD={ipd*1000:F0}mm，FOV={fov}°。保存场景后 Build & Run。");
         Selection.activeGameObject = rightGO;
+    }
+
+    private static void SetField(object target, string name, object value)
+    {
+        target.GetType()
+              .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)
+              ?.SetValue(target, value);
     }
 
     // ── 辅助：把下载好的 360° 图赋给球 ──────────────────────────────────

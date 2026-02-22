@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: 360_Test_Mat
+  m_Name: 360_Right_Mat
   m_Shader: {fileID: 4800000, guid: eca1657a1c32e4f4186ec8252e078d5c, type: 3}
   m_ValidKeywords: []
   m_InvalidKeywords: []
@@ -26,7 +26,7 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Eye: 0
+    - _Eye: 1
     - _StereoMode: 0
     m_Colors: []
   m_BuildTextureStacks: []

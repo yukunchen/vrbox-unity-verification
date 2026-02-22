@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   k1: 0.2
   k2: 0.05
-  ipd: 0.064
+  ipd: 0.078
   fovDegrees: 90
   displayLatencyMs: 4

@@ -4,7 +4,8 @@
  *
  * 一键建立 Phase 1 最小验证场景：
  *   - VR Rig root + PhoneIMUSource
- *   - Main Camera (子物体) + VRHeadTracking
+ *   - Left/Right Camera (子物体) + VRHeadTracking
+ *   - StereoCameraRig（默认双目）
  *   - 棋盘格 360° 球（验证旋转方向）
  *   - 四个彩色方块（方位参考）
  */
@@ -21,6 +22,9 @@ public static class VRBoxSceneSetup
     [MenuItem("VRBox/Setup Phase 1 Scene")]
     public static void SetupPhase1()
     {
+        // Always start from a clean scene so no legacy Main Camera remains.
+        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
         // ── 1. VRSettings ScriptableObject ─────────────────────────────
         const string settingsPath = "Assets/VR/VRSettings_Default.asset";
         VRSettings settings = AssetDatabase.LoadAssetAtPath<VRSettings>(settingsPath);
@@ -40,23 +44,43 @@ public static class VRBoxSceneSetup
         var rig = new GameObject("VR Rig");
         var imuSource = rig.AddComponent<PhoneIMUSource>();
 
-        // ── 3. Main Camera (child of Rig) ───────────────────────────────
-        var camGO = new GameObject("Main Camera");
-        camGO.tag = "MainCamera";
-        camGO.transform.SetParent(rig.transform, false);
+        // ── 3. Stereo Cameras (children of Rig) ────────────────────────────
+        var leftGO = new GameObject("Left Camera");
+        leftGO.tag = "MainCamera";
+        leftGO.transform.SetParent(rig.transform, false);
 
-        var cam = camGO.AddComponent<Camera>();
-        cam.fieldOfView   = 90f;
-        cam.nearClipPlane = 0.01f;
-        cam.farClipPlane  = 500f;
-        cam.clearFlags    = CameraClearFlags.SolidColor;
-        cam.backgroundColor = Color.black;
+        var leftCam = leftGO.AddComponent<Camera>();
+        leftCam.fieldOfView   = 90f;
+        leftCam.nearClipPlane = 0.01f;
+        leftCam.farClipPlane  = 500f;
+        leftCam.clearFlags    = CameraClearFlags.SolidColor;
+        leftCam.backgroundColor = Color.black;
+        leftCam.depth = 0f;
 
-        // VRHeadTracking on the Camera GameObject (OnPreRender only fires on Camera components)
-        var headTracking = camGO.AddComponent<VRHeadTracking>();
+        var rightGO = new GameObject("Right Camera");
+        rightGO.tag = "Untagged";
+        rightGO.transform.SetParent(rig.transform, false);
+
+        var rightCam = rightGO.AddComponent<Camera>();
+        rightCam.fieldOfView   = 90f;
+        rightCam.nearClipPlane = leftCam.nearClipPlane;
+        rightCam.farClipPlane  = leftCam.farClipPlane;
+        rightCam.clearFlags    = leftCam.clearFlags;
+        rightCam.backgroundColor = leftCam.backgroundColor;
+        rightCam.depth = leftCam.depth + 1f;
+
+        // VRHeadTracking on camera object (OnPreRender only fires on Camera components)
+        var headTracking = leftGO.AddComponent<VRHeadTracking>();
         SetField(headTracking, "imuSourceComponent", imuSource);
         SetField(headTracking, "vrSettings",         settings);
         SetField(headTracking, "cameraRigTransform", rig.transform);
+
+        // Centralized stereo setup from VRSettings
+        var stereoRig = rig.AddComponent<StereoCameraRig>();
+        SetField(stereoRig, "leftCamera",  leftCam);
+        SetField(stereoRig, "rightCamera", rightCam);
+        SetField(stereoRig, "vrSettings",  settings);
+        stereoRig.ApplyStereoCameraSetup();
 
         // ── 4. 360° Sphere ──────────────────────────────────────────────
         var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -99,7 +123,7 @@ public static class VRBoxSceneSetup
         AssetDatabase.SaveAssets();
 
         Selection.activeGameObject = rig;
-        Debug.Log("[VRBoxSetup] ✅ Phase 1 scene ready. " +
+        Debug.Log("[VRBoxSetup] ✅ Phase 1 scene ready (stereo enabled). " +
                   "File → Save As → Assets/VRBox_Phase1.unity  →  Build & Run on iPhone.");
     }
 
