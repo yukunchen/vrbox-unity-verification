@@ -41,3 +41,8 @@ Builds/
 *.xcodeproj/
 *.xcworkspace/
 DerivedData/
+
+# Test video — too large for git; re-download with yt-dlp or copy manually
+# yt-dlp --proxy http://127.0.0.1:7890 -f "136+140" --merge-output-format mp4 \
+#   -o "Assets/StreamingAssets/video360.mp4" https://www.youtube.com/watch?v=v0zBPO5YWXI
+Assets/StreamingAssets/*.mp4

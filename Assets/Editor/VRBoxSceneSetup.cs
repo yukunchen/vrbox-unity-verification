@@ -31,14 +31,18 @@ public static class VRBoxSceneSetup
         if (settings == null)
         {
             settings = ScriptableObject.CreateInstance<VRSettings>();
-            settings.k1             = 0.2f;
-            settings.k2             = 0.05f;
-            settings.ipd            = 0.064f;
-            settings.fovDegrees     = 90f;
-            settings.displayLatencyMs = 4f;
             AssetDatabase.CreateAsset(settings, settingsPath);
-            AssetDatabase.SaveAssets();
         }
+        // Always overwrite so re-running the wizard picks up the latest defaults.
+        // k1=1.0 produces ~29% edge-warp — unmistakably visible for on-device testing.
+        // After confirming distortion is visible, change k1 to 0.2 (production lens value).
+        settings.k1             = 1.0f;   // TESTING (change to 0.2f for production)
+        settings.k2             = 0.0f;   // TESTING (change to 0.05f for production)
+        settings.ipd            = 0.064f;
+        settings.fovDegrees     = 90f;
+        settings.displayLatencyMs = 4f;
+        EditorUtility.SetDirty(settings);
+        AssetDatabase.SaveAssets();
 
         // ── 2. VR Rig root ──────────────────────────────────────────────
         var rig = new GameObject("VR Rig");
@@ -82,6 +86,34 @@ public static class VRBoxSceneSetup
         SetField(stereoRig, "vrSettings",  settings);
         stereoRig.ApplyStereoCameraSetup();
 
+        // ── 3b. Lens Distortion Post-Process ────────────────────────────
+        // Save a Material *asset* so the iOS build system includes the shader.
+        // A raw [SerializeField] Shader reference is stripped by the iOS linker.
+        const string distMatPath = "Assets/VR/LensDistortionBlit_Mat.mat";
+        Material distMat = null;
+        var distShader = Shader.Find("VRBox/LensDistortionBlit");
+        if (distShader != null)
+        {
+            if (AssetDatabase.LoadAssetAtPath<Material>(distMatPath) != null)
+                AssetDatabase.DeleteAsset(distMatPath);
+            distMat = new Material(distShader);
+            AssetDatabase.CreateAsset(distMat, distMatPath);
+            AssetDatabase.SaveAssets();
+        }
+        else
+        {
+            Debug.LogWarning("[VRBoxSetup] Shader VRBox/LensDistortionBlit not found. " +
+                "Re-run this menu item after Unity re-imports shaders.");
+        }
+
+        var leftBlit   = leftGO.AddComponent<EyeDistortionBlit>();
+        SetField(leftBlit,  "vrSettings",         settings);
+        SetField(leftBlit,  "distortionMaterial",  distMat);
+
+        var rightBlit  = rightGO.AddComponent<EyeDistortionBlit>();
+        SetField(rightBlit, "vrSettings",         settings);
+        SetField(rightBlit, "distortionMaterial",  distMat);
+
         // ── 4. 360° Sphere ──────────────────────────────────────────────
         var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         sphere.name = "360_Sphere";
@@ -103,6 +135,10 @@ public static class VRBoxSceneSetup
             Debug.LogWarning("[VRBoxSetup] Shader VRBox/Equirectangular360 not found yet — " +
                 "it will appear after Unity re-imports shaders. Re-run this menu item.");
         }
+
+        // Add VideoTextureReceiver so the 360° sphere plays the bundled video
+        var videoReceiver = sphere.AddComponent<VideoTextureReceiver>();
+        SetField(videoReceiver, "videoUrl", "streaming:video360.mp4");
 
         // ── 5. Cardinal reference cubes ─────────────────────────────────
         MakeCube("North [Blue]",  new Vector3( 0, 0,  8), new Color(0.2f, 0.4f, 1f));

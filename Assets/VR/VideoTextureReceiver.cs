@@ -18,18 +18,26 @@ namespace VRBox
     /// Attaches the texture to the 360° sphere renderer each frame.
     ///
     /// Attach to the 360° sphere GameObject alongside a Renderer component.
+    ///
+    /// Video URL examples:
+    ///   Local StreamingAssets:  "file://" + Application.streamingAssetsPath + "/video360.mp4"
+    ///   Remote HTTP:            "https://example.com/video360.mp4"
     /// </summary>
     public class VideoTextureReceiver : MonoBehaviour
     {
         [Tooltip("Material property name for the main video texture.")]
         [SerializeField] private string texturePropertyName = "_MainTex";
 
+        [Tooltip("Video URL to play. Supports file:// (StreamingAssets) and http(s)://.\n" +
+                 "Leave empty to skip native playback. Prefix 'streaming:' to resolve from StreamingAssets automatically.")]
+        [SerializeField] private string videoUrl = "";
+
         [Tooltip("Inject a mock provider in tests; leave null to use native bridge.")]
         [SerializeField] private MonoBehaviour videoProviderOverride;
 
         private IVideoTextureProvider _provider;
+        private NativeVideoTextureProvider _nativeProvider;
         private Renderer _renderer;
-        private Texture2D _externalTex;
 
         private void Awake()
         {
@@ -41,7 +49,11 @@ namespace VRBox
             }
             else
             {
-                _provider = new NativeVideoTextureProvider();
+                string resolvedUrl = ResolveUrl(videoUrl);
+                _nativeProvider = new NativeVideoTextureProvider();
+                _provider = _nativeProvider;
+                if (!string.IsNullOrEmpty(resolvedUrl))
+                    _nativeProvider.StartSession(resolvedUrl);
             }
         }
 
@@ -56,8 +68,19 @@ namespace VRBox
 
         private void OnDestroy()
         {
-            if (_externalTex != null)
-                Destroy(_externalTex);
+            _nativeProvider?.StopSession();
+        }
+
+        // Convenience: prefix "streaming:" auto-resolves to StreamingAssets file:// URL
+        private static string ResolveUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+            if (url.StartsWith("streaming:"))
+            {
+                string filename = url.Substring("streaming:".Length);
+                return "file://" + Application.streamingAssetsPath + "/" + filename;
+            }
+            return url;
         }
     }
 
@@ -72,10 +95,36 @@ namespace VRBox
     {
 #if UNITY_IOS && !UNITY_EDITOR
         [DllImport("__Internal")]
+        private static extern void VideoTextureBridge_StartSession(string url);
+
+        [DllImport("__Internal")]
+        private static extern void VideoTextureBridge_StopSession();
+
+        [DllImport("__Internal")]
         private static extern IntPtr VideoTextureBridge_GetCurrentTexture();
+
+        [DllImport("__Internal")]
+        private static extern int VideoTextureBridge_GetVideoWidth();
+
+        [DllImport("__Internal")]
+        private static extern int VideoTextureBridge_GetVideoHeight();
 #endif
 
         private Texture2D _tex;
+
+        public void StartSession(string url)
+        {
+#if UNITY_IOS && !UNITY_EDITOR
+            VideoTextureBridge_StartSession(url);
+#endif
+        }
+
+        public void StopSession()
+        {
+#if UNITY_IOS && !UNITY_EDITOR
+            VideoTextureBridge_StopSession();
+#endif
+        }
 
         public Texture GetCurrentTexture()
         {
@@ -85,8 +134,11 @@ namespace VRBox
 
             if (_tex == null)
             {
-                // Dimensions will be updated by the external texture; start with 1x1
-                _tex = Texture2D.CreateExternalTexture(1, 1,
+                int w = VideoTextureBridge_GetVideoWidth();
+                int h = VideoTextureBridge_GetVideoHeight();
+                if (w == 0 || h == 0) return null;   // first frame not decoded yet
+
+                _tex = Texture2D.CreateExternalTexture(w, h,
                     TextureFormat.BGRA32, false, false, nativePtr);
             }
             else

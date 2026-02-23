@@ -3,7 +3,8 @@
  *
  * Phase 1-2 stub implementations.
  * Provides empty symbols so Xcode links successfully without the real
- * ATWPlugin / IMUBridge / VideoTextureBridge native plugins.
+ * ATWPlugin / IMUBridge native plugins.
+ * VideoTextureBridge has been implemented in VideoTextureBridge.mm (Phase 2).
  *
  * Replace individual stubs with real .mm files as each phase is implemented.
  */
@@ -45,10 +46,4 @@ void IMUBridge_GetPredictedQuaternion(double dt,
     if (w) *w = 1.f;
 }
 
-// ---------------------------------------------------------------------------
-// VideoTextureBridge stubs  (Phase 2 — static image first, video later)
-// ---------------------------------------------------------------------------
-
-void  VideoTextureBridge_StartSession(const char* urlCStr) {}
-void  VideoTextureBridge_StopSession(void) {}
-void* VideoTextureBridge_GetCurrentTexture(void) { return NULL; }
+// VideoTextureBridge stubs removed — real implementation in VideoTextureBridge.mm
