@@ -24,7 +24,48 @@ PhoneIMUSource → VRHeadTracking → StereoCameraRig
 | 2 | VideoTextureBridge (AVPlayer→CVMetal 零拷贝) | ✅ 完成 | 设备运行，NYC 360°视频正常播放 |
 | 3 | 镜头畸变后处理 Pass (圆形遮罩 + 桶形预校正) | ✅ 完成 | 设备运行 |
 | 7 | IMUBridge (外部 MCU via EAAccessory) | ⏳ 存根 | MCU 协议 TBD |
-| 8 | ATWPlugin (Metal compute shader warp) | ⏳ 存根 | — |
+| 8 | Sync TimeWarp (ATW) — 旋转补偿 warp pass | ✅ 实现 | 待设备验证 |
+
+---
+
+## Phase 8 实现细节（Sync TimeWarp）
+
+### 架构
+
+ATW（Asynchronous TimeWarp）在 `EyeDistortionBlit.OnRenderImage` 内执行同步旋转补偿 warp，
+与镜头畸变后处理合并为一个 pass，不增加额外 draw call：
+
+```
+渲染时（OnPreRender）：VRHeadTracking 存储 RenderPose = qRender
+显示时（OnRenderImage）：
+    1. qNow = imuSource.GetCurrentPose()（最新 IMU 读数）
+    2. warpQ = Inverse(qRender) * qNow
+    3. shader: 输出像素 NDC → view direction → warpQ 旋转 → render-time NDC
+    4. 在 render-time NDC 上执行 Undistort（现有 Newton-Raphson）
+    5. 采样渲染帧
+```
+
+### 关键文件
+
+- `Assets/Shaders/LensDistortionBlit.shader` — 新增 ATW warp 步骤（圆形遮罩之后、Undistort 之前）
+- `Assets/VR/EyeDistortionBlit.cs` — 新增 `imuSourceComponent` 字段，每帧计算 warpQ 并传入 shader
+- `Assets/Editor/VRBoxSceneSetup.cs` — Setup 向导自动将 PhoneIMUSource 注入两个眼睛的 EyeDistortionBlit
+
+### warpQ 数学
+
+```
+warpQ = Inverse(qRender) * qNow
+renderDir = mul(warpQ_matrix, viewDir)
+```
+
+**注意**：`ATWMath.ComputeDelta` 返回 `qNow * Inverse(qRender)`（正方向，将渲染帧方向映射到显示方向）。
+Shader 需要反方向（source lookup：给定显示像素，找渲染帧采样位置），所以用 `Inverse(qRender) * qNow`，
+而不是 `ATWMath.ComputeDelta`。
+
+### Fallback
+
+`imuSourceComponent` 为 null 时（Editor Play Mode）：自动传入 identity 矩阵，
+shader 行为与 Phase 3 完全相同（warpedNDC = ndc）。
 
 ---
 

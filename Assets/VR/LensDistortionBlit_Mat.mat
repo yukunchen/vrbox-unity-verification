@@ -30,5 +30,7 @@ Material:
     - _K1: 0.2
     - _K2: 0.05
     - _LensRadius: 0.9
+    - _TanHalfFovH: 1
+    - _TanHalfFovV: 1
     m_Colors: []
   m_BuildTextureStacks: []

@@ -107,12 +107,14 @@ public static class VRBoxSceneSetup
         }
 
         var leftBlit   = leftGO.AddComponent<EyeDistortionBlit>();
-        SetField(leftBlit,  "vrSettings",         settings);
+        SetField(leftBlit,  "vrSettings",          settings);
         SetField(leftBlit,  "distortionMaterial",  distMat);
+        SetField(leftBlit,  "imuSourceComponent",  imuSource);
 
         var rightBlit  = rightGO.AddComponent<EyeDistortionBlit>();
-        SetField(rightBlit, "vrSettings",         settings);
+        SetField(rightBlit, "vrSettings",          settings);
         SetField(rightBlit, "distortionMaterial",  distMat);
+        SetField(rightBlit, "imuSourceComponent",  imuSource);
 
         // ── 4. 360° Sphere ──────────────────────────────────────────────
         var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);

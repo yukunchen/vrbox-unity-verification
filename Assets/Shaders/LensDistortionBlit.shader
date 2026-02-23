@@ -24,6 +24,10 @@ Shader "VRBox/LensDistortionBlit"
         _LensRadius ("Lens Circle Radius",        Float) = 0.9
         // pixelWidth / pixelHeight of the eye camera — set by EyeDistortionBlit.cs
         _EyeAspect  ("Eye Aspect (w/h)",          Float) = 1.0
+        // ATW (Sync TimeWarp) — set by EyeDistortionBlit.cs each frame
+        // _ATWRotation is a float4x4 set via material.SetMatrix; not listed here
+        _TanHalfFovH ("tan(FovH/2)", Float) = 1.0
+        _TanHalfFovV ("tan(FovV/2)", Float) = 1.0
     }
 
     SubShader
@@ -46,6 +50,9 @@ Shader "VRBox/LensDistortionBlit"
             float     _K2;
             float     _LensRadius;
             float     _EyeAspect;
+            float4x4  _ATWRotation;   // warpQ rotation matrix — identity = no ATW
+            float     _TanHalfFovH;   // tan(fovH / 2) — set by EyeDistortionBlit
+            float     _TanHalfFovV;   // tan(fovV / 2) — set by EyeDistortionBlit
 
             struct v2f
             {
@@ -88,8 +95,23 @@ Shader "VRBox/LensDistortionBlit"
                 if (dot(circleCoord, circleCoord) > _LensRadius * _LensRadius)
                     return fixed4(0.0, 0.0, 0.0, 1.0);
 
+                // ── ATW Rotation Warp ─────────────────────────────────────────────
+                // Unproject output NDC → view direction (frustum / pinhole model)
+                float3 viewDir = float3(ndc.x * _TanHalfFovH, ndc.y * _TanHalfFovV, 1.0);
+
+                // Rotate: maps display-time view direction → render-time source direction
+                // warpQ = Inverse(qRender) * qNow  (identity when no head motion)
+                float3 renderDir = mul((float3x3)_ATWRotation, viewDir);
+
+                // Perspective re-project to render-frame NDC
+                float  invZ      = 1.0 / max(renderDir.z, 0.0001);
+                float2 warpedNDC = float2(
+                    renderDir.x * invZ / _TanHalfFovH,
+                    renderDir.y * invZ / _TanHalfFovV
+                );
+
                 // ── Inverse barrel distortion ────────────────────────────────────
-                float2 srcNdc = Undistort(ndc);
+                float2 srcNdc = Undistort(warpedNDC);
 
                 // NDC [-1,1] → UV [0,1]
                 float2 srcUV = srcNdc * 0.5 + 0.5;

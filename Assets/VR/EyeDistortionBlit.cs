@@ -17,21 +17,27 @@ namespace VRBox
     [RequireComponent(typeof(Camera))]
     public class EyeDistortionBlit : MonoBehaviour
     {
-        [SerializeField] private VRSettings vrSettings;
+        [SerializeField] private VRSettings  vrSettings;
+        [SerializeField] private MonoBehaviour imuSourceComponent;
 
         // Must be a saved Material asset — raw Shader fields are stripped by iOS build.
         [SerializeField] private Material distortionMaterial;
 
-        private Material _mat;
-        private Camera   _camera;
+        private Material   _mat;
+        private Camera     _camera;
+        private IIMUSource _imuSource;
 
         private void Awake()
         {
-            _camera = GetComponent<Camera>();
+            _camera    = GetComponent<Camera>();
+            _imuSource = imuSourceComponent as IIMUSource;
+            if (imuSourceComponent != null && _imuSource == null)
+                Debug.LogWarning("[EyeDistortionBlit] imuSourceComponent does not implement IIMUSource — ATW disabled.");
 
             Debug.Log($"[EyeDistortionBlit] Awake on '{name}'. " +
                       $"material={(distortionMaterial != null ? distortionMaterial.name : "NULL")}, " +
-                      $"vrSettings={(vrSettings != null ? "OK" : "NULL")}");
+                      $"vrSettings={(vrSettings != null ? "OK" : "NULL")}, " +
+                      $"atw={((_imuSource != null) ? "enabled" : "disabled (no IMU source)")}");
 
             if (distortionMaterial == null)
             {
@@ -60,6 +66,26 @@ namespace VRBox
             _mat.SetFloat("_K2",         K2());
             _mat.SetFloat("_EyeAspect",  eyeAspect);
             // _LensRadius stays at the material default (0.9) unless overridden in Inspector
+
+            // ── ATW warp uniforms ────────────────────────────────────────────
+            if (_imuSource != null)
+            {
+                Quaternion qNow    = _imuSource.GetCurrentPose();
+                Quaternion qRender = VRHeadTracking.RenderPose;
+                // warpQ: maps display-time view direction → render-time source direction
+                // = Inverse(qRender) * qNow  (NOT ATWMath.ComputeDelta which is the opposite)
+                Quaternion warpQ = Quaternion.Inverse(qRender) * qNow;
+                _mat.SetMatrix("_ATWRotation", Matrix4x4.Rotate(warpQ));
+            }
+            else
+            {
+                _mat.SetMatrix("_ATWRotation", Matrix4x4.identity);
+            }
+
+            float fovV       = vrSettings != null ? vrSettings.fovDegrees : 90f;
+            float tanHalfFovV = Mathf.Tan(fovV * 0.5f * Mathf.Deg2Rad);
+            _mat.SetFloat("_TanHalfFovV", tanHalfFovV);
+            _mat.SetFloat("_TanHalfFovH", tanHalfFovV * eyeAspect);
 
             // Single-pass blit — Unity manages Metal render-target + viewport for each eye
             Graphics.Blit(src, dest, _mat);

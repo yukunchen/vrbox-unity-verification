@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8dc24d8321d4545c3ae940d5d773f65a, type: 3}
   m_Name: VRSettings_Default
   m_EditorClassIdentifier: 
-  k1: 0.2
-  k2: 0.05
+  k1: 1
+  k2: 0
   ipd: 0.064
   fovDegrees: 90
   displayLatencyMs: 4
